@@ -1,3 +1,5 @@
+#include <ranges>
+
 #include "peerconnection_manager.h"
 #include "tunnel_loggin.h"
 
@@ -13,16 +15,11 @@ PeerconnectionManager::PeerconnectionManager(std::shared_ptr<RTCSignalingObserve
     _stats_thread = std::jthread([this](std::stop_token st) {
         while(!st.stop_requested()) {
             for(auto& cb : _stats) cb->fetch();
-            // print stats
-            for(auto& cb : _stats) {
-                auto stats = cb->get_stats();
-                TUNNEL_LOG(TunnelLogging::Severity::VERBOSE) << "Stats for " << cb->get_id() << ": "
-                    << "Bitrate: " << stats.bitrate << " kbps, "
-                    << "FPS: " << stats.fps << ", "
-                    << "Delay: " << stats.delay << " ms, "
-                    << "RTT: " << stats.rtt << " ms";
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(STATS_INTERVAL));
+            std::this_thread::sleep_for(std::chrono::milliseconds(STATS_INTERVAL / 5));
+            auto stats = _stats | std::views::transform([](const auto& cb) { return cb->get_stats(); })
+            | std::ranges::to<std::vector<StatsCallback::RTCStats>>();
+            _signaling_observer->on_stats(_local_id, stats);
+            std::this_thread::sleep_for(std::chrono::milliseconds(4 * STATS_INTERVAL / 5));
         }
     });
 
@@ -172,26 +169,6 @@ void StatsCallback::on_stats_delivered(const rtc::scoped_refptr<const webrtc::RT
         }
     }
 }
-
-/* template<>
-void StatsCallback<webrtc::RTCOutboundRTPStreamStats>::OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report)
-{
-    auto stats = report->GetStatsOfType<webrtc::RTCOutboundRTPStreamStats>();
-
-    for(const auto& s : stats) {
-        if(*s->kind == webrtc::RTCMediaStreamTrackKind::kVideo) {
-            auto ts = s->timestamp();
-            auto ts_ms = ts.ms();
-            auto delta = ts_ms - _stats.timestamp;
-            auto bytes = *s->bytes_sent - _stats.bytes;
-            
-            _stats.timestamp = ts_ms;
-            _stats.bytes = *s->bytes_sent;
-            _stats.bitrate = static_cast<int>(8. * bytes / delta);
-            _stats.fps = s->frames_per_second.ValueOrDefault(0.);
-        }
-    }
-} */
 
 void StatsCallback::fetch()
 {

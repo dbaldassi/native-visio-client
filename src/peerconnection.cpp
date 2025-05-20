@@ -236,52 +236,6 @@ void Peerconnection::set_remote_description(const std::string &sdp)
   _pc->SetRemoteDescription(std::move(desc), _obs);
 }
 
-// void Peerconnection::OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report)
-// {  
-//   RTCStats rtc_stats;
-  
-//   auto inbound_stats = report->GetStatsOfType<webrtc::RTCInboundRTPStreamStats>();
-  
-//   for(const auto& s : inbound_stats) {
-//     if(*s->kind == webrtc::RTCMediaStreamTrackKind::kVideo) {
-//       auto ts = s->timestamp();
-//       auto ts_ms = ts.ms();
-//       auto delta = ts_ms - _prev_ts;
-//       auto bytes = *s->bytes_received - _prev_bytes;
-      
-//       rtc_stats.x = _count;
-//       rtc_stats.link = link;
-//       rtc_stats.bitrate = static_cast<int>(8. * bytes / delta);
-//       rtc_stats.fps = s->frames_per_second.ValueOrDefault(0.);
-//       rtc_stats.frame_dropped = s->frames_dropped.ValueOrDefault(0.);
-//       rtc_stats.frame_decoded = s->frames_decoded.ValueOrDefault(0.);
-//       rtc_stats.frame_key_decoded = s->key_frames_decoded.ValueOrDefault(0.);
-//       rtc_stats.frame_width = s->frame_width.ValueOrDefault(0);
-//       rtc_stats.frame_height = s->frame_height.ValueOrDefault(0);
-      
-//       TUNNEL_LOG(TunnelLogging::Severity::VERBOSE) << s->frame_width.ValueOrDefault(0.) << "x" << s->frame_height.ValueOrDefault(0.);
-      
-//       _prev_ts = ts_ms;
-//       _prev_bytes = *s->bytes_received;
-//     }
-//   }
-  
-//   auto remote_outbound_stats = report->GetStatsOfType<webrtc::RTCRemoteOutboundRtpStreamStats>();
-//   for(const auto& s : remote_outbound_stats) {
-//     if(*s->kind == webrtc::RTCMediaStreamTrackKind::kVideo) {
-//       rtc_stats.rtt = static_cast<int>(s->round_trip_time.ValueOrDefault(0.) * 1000);
-//     }
-//   }
-  
-//   if(_delay_count > 0) {
-//     std::unique_lock<std::mutex> lock(_delay_mutex);
-//     rtc_stats.delay = _delay_sum / _delay_count;
-//     _delay_count = 0; _delay_sum = 0;
-//   }
-  
-//   if(onstats) onstats(std::move(rtc_stats));
-// }
-
 void Peerconnection::OnSignalingChange(webrtc::PeerConnectionInterface::SignalingState new_state) 
 {
   switch(new_state) {

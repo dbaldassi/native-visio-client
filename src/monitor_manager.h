@@ -46,7 +46,7 @@ public:
   void start();
   void stop();
 
-  void send_report(Report report);
+  void send_report(const std::vector<json>& reports);
 };
 
 

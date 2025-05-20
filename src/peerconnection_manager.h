@@ -24,18 +24,6 @@ public:
     void OnSetRemoteDescriptionComplete(webrtc::RTCError error) override;
 };
 
-class RTCSignalingObserverInterface
-{
-    public:
-        virtual ~RTCSignalingObserverInterface() = default;
-        // for publisher
-        virtual void on_local_description(const std::string& sdp) = 0;
-        virtual void on_remote_description() = 0;
-        // for subscribers
-        virtual void on_local_description(const std::string& id, const std::string& sdp) = 0;
-        virtual void on_remote_description(const std::string& id) = 0;        
-};
-
 class StatsCallback : public webrtc::RTCStatsCollectorCallback
 {
 public:
@@ -65,6 +53,20 @@ private:
     RTCStats _stats;
     Peerconnection * _pc = nullptr;
     std::string _id;
+};
+
+class RTCSignalingObserverInterface
+{
+    public:
+        virtual ~RTCSignalingObserverInterface() = default;
+        // for publisher
+        virtual void on_local_description(const std::string& sdp) = 0;
+        virtual void on_remote_description() = 0;
+        // for subscribers
+        virtual void on_local_description(const std::string& id, const std::string& sdp) = 0;
+        virtual void on_remote_description(const std::string& id) = 0;
+
+        virtual void on_stats(const std::string& id, const std::vector<StatsCallback::RTCStats>& stats) = 0;
 };
 
 class InboundStatsCallback : public StatsCallback

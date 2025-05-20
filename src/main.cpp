@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <print>
+#include <ranges>
 
 #include "main_window.h"
 
@@ -17,8 +18,9 @@
 class RTCSignalingObserver : public RTCSignalingObserverInterface
 {
   MedoozeMgr& _ws;
+  MonitorMgr& _monitor;
 public:
-    RTCSignalingObserver(MedoozeMgr& ws) : _ws(ws) {}
+    RTCSignalingObserver(MedoozeMgr& ws, MonitorMgr& monitor) : _ws(ws), _monitor(monitor) {}
     ~RTCSignalingObserver() = default;
 
     void on_local_description(const std::string& sdp) override
@@ -41,6 +43,21 @@ public:
     {
         std::println("Remote description for {}: ", id);
     }
+
+    void on_stats(const std::string& id, const std::vector<StatsCallback::RTCStats>& stats) override
+    {
+      std::print("Stats for {}: ", id);
+      auto reports = stats | std::views::transform([](const auto& s) {
+          return nlohmann::json{
+              {"bitrate", s.bitrate},
+              {"fps", s.fps},
+              {"delay", s.delay},
+              {"rtt", s.rtt}
+          };
+      }) | std::ranges::to<std::vector<nlohmann::json>>();
+
+      _monitor.send_report(reports);
+    }
 };
 
 int run(int argc, char * argv[])
@@ -50,8 +67,8 @@ int run(int argc, char * argv[])
 #endif
 
   MedoozeMgr        medooze;
-  PeerconnectionManager rtc_manager(std::make_shared<RTCSignalingObserver>(medooze));
   MonitorMgr        monitor;
+  PeerconnectionManager rtc_manager(std::make_shared<RTCSignalingObserver>(medooze, monitor));
   MainWindow        window;
 
   std::optional<std::string> name;
@@ -73,8 +90,8 @@ int run(int argc, char * argv[])
   // pc.port_range = std::move(range);
 
   medooze.onname = [&monitor, &name](const std::string& mname) {
-    // monitor.name = name.value_or(mname);
-    // monitor.start();
+    monitor.name = name.value_or(mname);
+    monitor.start();
   };
   medooze.onanswer = [&rtc_manager](const std::string& id, const std::string& sdp) -> void { 
     std::print("Answer: {}\n", id);

@@ -45,27 +45,12 @@ void MonitorMgr::stop()
   _ws.disconnect();
 }
 
-void MonitorMgr::send_report(Report report)
+void MonitorMgr::send_report(const std::vector<json>& report)
 {
-  json data{};
+  json data{
+    { "cmd", "report" },
+    { "reports", report }
+  };
   
-  if(report.target.has_value()) {
-    data.emplace("cmd", "target");
-    data.emplace("target", *report.target);
-    data.emplace("rid", *report.rid);
-    data.emplace("name", name);
-  }
-  else if(report.bitrate.has_value() || report.fps.has_value()) {
-    std::string res = fmt::format("{}x{}", *report.width, *report.height);
-    
-    data.emplace("cmd", "bitrate");
-    data.emplace("bitrate", *report.bitrate);
-    data.emplace("fps", *report.fps);
-    data.emplace("delay", *report.delay);
-    data.emplace("rtt", *report.rtt);
-    data.emplace("res", res);
-    data.emplace("name", name);
-  }
-
   _ws.send(data.dump());
 }
