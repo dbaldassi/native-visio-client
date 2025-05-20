@@ -22,7 +22,6 @@ class Peerconnection : public webrtc::PeerConnectionObserver,
   static std::unique_ptr<rtc::Thread> _signaling_th;
 
   rtc::scoped_refptr<webrtc::PeerConnectionInterface> _pc;
-  rtc::scoped_refptr<Peerconnection> _me;
   rtc::scoped_refptr<SessionDescriptionObserverInterface> _obs;
 
   void create_pc();
@@ -30,30 +29,8 @@ class Peerconnection : public webrtc::PeerConnectionObserver,
 public:
   rtc::VideoSinkInterface<webrtc::VideoFrame> * video_sink = nullptr;
 
-  struct RTCStats
-  {
-    int x;
-    int bitrate;
-    int link;
-    int fps;    
-    int frame_dropped = 0;
-    int frame_decoded = 0;
-    int frame_key_decoded = 0;
-    int frame_rendered = 0;
-    int frame_width = 0;
-    int frame_height = 0;
-    int delay = 0;
-    int rtt = 0;
-  };
-
-  std::function<void(RTCStats)> onstats; 
-  
   static rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface> get_pcf();
   static void clean();
-
-  std::function<void(const std::string&)> onlocaldesc;
-  std::list<RTCStats> stats;
-  int link;
 
   struct PortRange
   {
@@ -70,6 +47,9 @@ public:
   void publish();
 
   void get_local_description(std::string &sdp);
+  void get_stats(webrtc::RTCStatsCollectorCallback* callback) {
+    _pc->GetStats(callback);
+  }
 
   void stop();
   void set_remote_description(const std::string& sdp);

@@ -3,12 +3,28 @@
 
 #include "peerconnection.h"
 
+#include "api/stats/rtcstats_objects.h"
+
 PeerconnectionManager::PeerconnectionManager(std::shared_ptr<RTCSignalingObserverInterface> signaling_observer)
     : _signaling_observer(std::move(signaling_observer))
 {
     TUNNEL_LOG(TunnelLogging::Severity::VERBOSE) << "PeerconnectionManager created";
 
-    _stats_manager = rtc::make_ref_counted<StatsManager>();
+    _stats_thread = std::jthread([this](std::stop_token st) {
+        while(!st.stop_requested()) {
+            for(auto& cb : _stats) cb->fetch();
+            // print stats
+            for(auto& cb : _stats) {
+                auto stats = cb->get_stats();
+                TUNNEL_LOG(TunnelLogging::Severity::VERBOSE) << "Stats for " << cb->get_id() << ": "
+                    << "Bitrate: " << stats.bitrate << " kbps, "
+                    << "FPS: " << stats.fps << ", "
+                    << "Delay: " << stats.delay << " ms, "
+                    << "RTT: " << stats.rtt << " ms";
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(STATS_INTERVAL));
+        }
+    });
 
     rtc::LogMessage::LogToDebug(rtc::LS_ERROR);
 }
@@ -27,6 +43,9 @@ void PeerconnectionManager::publish(std::string id, rtc::VideoSinkInterface<webr
     pc->video_sink = sink;
     _peerconnections[id] = std::move(pc);
     _peerconnections[id]->publish();
+
+    auto stats = rtc::make_ref_counted<OutboundStatsCallback>( _peerconnections[id].get(), id);
+    _stats.push_front(std::move(stats));
 }
 
 void PeerconnectionManager::subscribe(const std::string& remote_id, rtc::VideoSinkInterface<webrtc::VideoFrame>* sink)
@@ -36,6 +55,9 @@ void PeerconnectionManager::subscribe(const std::string& remote_id, rtc::VideoSi
     pc->video_sink = sink;
     _peerconnections[remote_id] = std::move(pc);
     _peerconnections[remote_id]->subscribe();
+
+    auto stats = rtc::make_ref_counted<InboundStatsCallback>(_peerconnections[remote_id].get(), remote_id);
+    _stats.push_back(std::move(stats));
 }
 
 void PeerconnectionManager::handle_answer(const std::string& id, const std::string& sdp)
@@ -67,11 +89,11 @@ void PeerconnectionManager::on_remote_description(const std::string& id)
 
 void PeerconnectionManager::stop(const std::string& id)
 {
-    /* auto it = _peerconnections.find(id);
-    if(it != _peerconnections.end()) {
-        it->second->stop();
-        _peerconnections.erase(it);
-    } */
+    auto it = std::find_if(_stats.begin(), _stats.end(), [&id](const auto& cb) {
+        return cb->get_id() == id;
+    });
+
+    if(it != _stats.end()) _stats.erase(it);
 
     auto pc = _peerconnections[id];
     pc->stop();
@@ -107,15 +129,81 @@ void SessionDescriptionObserver::OnSetRemoteDescriptionComplete(webrtc::RTCError
     }
 }
 
-void StatsManager::OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report)
+template<typename T>
+void StatsCallback::on_stats_delivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report)
 {
-    
+    auto stats = report->GetStatsOfType<T>();
+
+    uint64_t bytes = 0;
+    uint64_t fps = 0;
+
+    auto ts = report->timestamp();
+    auto ts_ms = ts.ms();
+    auto delta = ts_ms - _stats.timestamp;
+
+    for(const auto& s : stats) {
+        if(*s->kind == webrtc::RTCMediaStreamTrackKind::kVideo) {
+            if constexpr (std::is_same_v<T, webrtc::RTCInboundRTPStreamStats>) {
+                bytes += *s->bytes_received;
+            } else if constexpr (std::is_same_v<T, webrtc::RTCOutboundRTPStreamStats>) {
+                bytes += *s->bytes_sent;
+            }
+
+            fps += s->frames_per_second.ValueOrDefault(0.);
+        }
+    }
+
+    auto delta_bytes = bytes - _stats.bytes;
+    _stats.bytes = bytes;
+    _stats.timestamp = ts_ms;
+    _stats.bitrate = static_cast<int>(8. * delta_bytes / delta);
+    _stats.fps = fps / stats.size();
+
+    auto remote_stats = report->GetStatsOfType<std::conditional_t<std::is_same_v<T, webrtc::RTCInboundRTPStreamStats>,
+    webrtc::RTCRemoteOutboundRtpStreamStats,
+    webrtc::RTCRemoteInboundRtpStreamStats>>();
+
+    _stats.rtt = 0;
+
+    for(const auto& s : remote_stats) {
+        if(*s->kind == webrtc::RTCMediaStreamTrackKind::kVideo) {
+            auto rtt = s->round_trip_time.ValueOrDefault(0.) * 1000;
+            if(rtt > _stats.rtt) _stats.rtt = static_cast<int>(rtt);
+        }
+    }
 }
 
-// webrtc::webrtc_sequence_checker_internal::SequenceCheckerImpl::ExpectationToString() const
-
-/* namespace webrtc::webrtc_sequence_checker_internal
+/* template<>
+void StatsCallback<webrtc::RTCOutboundRTPStreamStats>::OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report)
 {
-    std::string SequenceCheckerImpl::ExpectationToString() const { return "wbla"; }
+    auto stats = report->GetStatsOfType<webrtc::RTCOutboundRTPStreamStats>();
 
+    for(const auto& s : stats) {
+        if(*s->kind == webrtc::RTCMediaStreamTrackKind::kVideo) {
+            auto ts = s->timestamp();
+            auto ts_ms = ts.ms();
+            auto delta = ts_ms - _stats.timestamp;
+            auto bytes = *s->bytes_sent - _stats.bytes;
+            
+            _stats.timestamp = ts_ms;
+            _stats.bytes = *s->bytes_sent;
+            _stats.bitrate = static_cast<int>(8. * bytes / delta);
+            _stats.fps = s->frames_per_second.ValueOrDefault(0.);
+        }
+    }
 } */
+
+void StatsCallback::fetch()
+{
+    _pc->get_stats(this);
+}
+
+void InboundStatsCallback::OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report)
+{
+    on_stats_delivered<webrtc::RTCInboundRTPStreamStats>(report);
+}
+
+void OutboundStatsCallback::OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report)
+{
+    on_stats_delivered<webrtc::RTCOutboundRTPStreamStats>(report);
+}
