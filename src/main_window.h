@@ -1,6 +1,8 @@
 #ifndef MAIN_WINDOW_H
 #define MAIN_WINDOW_H
 
+#include "widget.h"
+
 #ifndef FAKE_RENDERER
 
 #include <deque>
@@ -8,7 +10,6 @@
 #include <QMainWindow>
 #include <QApplication>
 
-#include "widget.h"
 
 class MainWindow : public QMainWindow
 {
@@ -28,6 +29,9 @@ private:
 
 #else
 
+#include <condition_variable>
+#include <mutex>
+
 class MainWindow
 {
 
@@ -37,13 +41,19 @@ public:
 
     VideoFrameWidget* use_video_widget(const std::string&) { return _video_widgets.get(); }
     void release_video_widget(const std::string&) {}
-    void close() {}
+    void close() {cv.notify_all(); }
 
-    void run() {}
+    int run() {
+      std::unique_lock<std::mutex> lock(cv_mutex);
+      cv.wait(lock);
+
+      return 0;
+    }
     
 private:
     std::unique_ptr<VideoFrameWidget> _video_widgets;
     std::condition_variable cv;
+    std::mutex cv_mutex;
 };
 
 #endif

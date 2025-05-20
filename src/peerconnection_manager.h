@@ -52,7 +52,7 @@ public:
     ~PeerconnectionManager();
 
     void stop(const std::string& id);
-    void stop_all();
+    void stop();
 
     void publish(std::string id, rtc::VideoSinkInterface<webrtc::VideoFrame> * sink);
     void subscribe(const std::string& remote_id, rtc::VideoSinkInterface<webrtc::VideoFrame> * sink);

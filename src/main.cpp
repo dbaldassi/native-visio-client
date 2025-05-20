@@ -102,12 +102,17 @@ int run(int argc, char * argv[])
 
   // monitor.connect();
   medooze.start();
+  int code;
 
 #ifndef FAKE_RENDERER
-  return app.exec();
+  code = app.exec();
 #else
-  return window.run();
+  code = window.run();
 #endif
+
+  rtc_manager.stop();
+
+  return code;
 }
 
 int main(int argc, char *argv[])

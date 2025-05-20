@@ -78,6 +78,14 @@ void PeerconnectionManager::stop(const std::string& id)
     _peerconnections.erase(id);
 }
 
+void PeerconnectionManager::stop()
+{
+    for(auto& [id, pc] : _peerconnections) pc->stop();
+    _peerconnections.clear();
+
+    Peerconnection::clean();
+}
+
 void SessionDescriptionObserver::OnSetLocalDescriptionComplete(webrtc::RTCError error)
 {
     TUNNEL_LOG(TunnelLogging::Severity::VERBOSE) << "On set local desc complete";
