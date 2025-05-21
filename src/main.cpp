@@ -73,21 +73,23 @@ int run(int argc, char * argv[])
 
   std::optional<std::string> name;
 
-  if(argc == 2) {
-    name = argv[1];
+  if(argc >= 6) {
+    medooze.host = argv[1];
+    medooze.port = std::atoi(argv[2]);
+    monitor.host = argv[3];
+    monitor.port = std::atoi(argv[4]);
+    medooze.room = argv[5];
+  } else {
+    std::cerr << "Usage: " << argv[0] << " <medooze_host> <medooze_port> <monitor_host> <monitor_port> [roomId]\n";
+    return EXIT_FAILURE;
   }
-  
-  medooze.host = std::getenv("MEDOOZE_HOST");
-  medooze.port = std::atoi(std::getenv("MEDOOZE_PORT"));
 
-  monitor.host = std::getenv("MONITOR_HOST");
-  monitor.port = std::atoi(std::getenv("MONITOR_PORT"));
-
+  if(argc == 7) {
+    name = argv[6];
+  }
+    
   std::cout << "Medooze on : " << medooze.host << ":" << medooze.port << "\n";
   std::cout << "Monitor on : " << monitor.host << ":" << monitor.port << "\n";
-  
-  // pc.video_sink = &window;
-  // pc.port_range = std::move(range);
 
   medooze.onname = [&monitor, &name](const std::string& mname) {
     monitor.name = name.value_or(mname);

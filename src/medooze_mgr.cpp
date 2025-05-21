@@ -12,7 +12,7 @@ MedoozeMgr::MedoozeMgr() : _alive{false}
     _cv.notify_all();
 
     // join room
-    _ws.send(json{{"cmd", "join"}, {"roomId", "room1"}}.dump());
+    _ws.send(json{{"cmd", "join"}, {"roomId", room }}.dump());
   };
   _ws.onclose = [this]()
   {

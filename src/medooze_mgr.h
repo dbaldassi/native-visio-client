@@ -19,6 +19,7 @@ public:
   using json = nlohmann::json;
   
   std::string host;
+  std::string room;
 
   int port;
   std::function<void(const std::string&, const std::string&)> onanswer;
